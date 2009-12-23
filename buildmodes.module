@@ -1,0 +1,27 @@
+<?php
+
+/*
+	implementation of hook_nodeapi
+*/
+function buildmodes_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+  switch ($op) {
+  }
+}
+
+/*
+	implementation of hook_user
+
+*/
+function buildmodes_user($op, &$edit, &$account, $category = NULL) {
+  switch ($op) {
+
+  }
+}
+
+function buildmodes_views_api() {
+  return array(
+    'api' => 2,
+    'path' => drupal_get_path('module', 'buildmodes'),
+  );
+}
+
