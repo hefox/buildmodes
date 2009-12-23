@@ -1,0 +1,14 @@
+.buildmodes-mode {
+  padding: 30px 0px;
+  margin: 5px 0px;
+    border-bottom: 1px solid #8FD2FF;
+}
+.buildmodes-mode-sub {
+  padding: 10px;
+  margin: 5px;
+  border: 1px solid #8FD2FF;
+}
+
+.buildmodes-item-title {
+  font-weight: bold;
+}

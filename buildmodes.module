@@ -1,27 +1,151 @@
 <?php
 
-/*
-	implementation of hook_nodeapi
-*/
-function buildmodes_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
-  switch ($op) {
-  }
-}
 
-/*
-	implementation of hook_user
 
-*/
-function buildmodes_user($op, &$edit, &$account, $category = NULL) {
-  switch ($op) {
-
-  }
-}
-
-function buildmodes_views_api() {
-  return array(
-    'api' => 2,
-    'path' => drupal_get_path('module', 'buildmodes'),
+function buildmodes_menu() {
+  $items = array();
+  $items['admin/content/buildmodes'] = array(
+    'title' => 'Build Modes',
+    'description' => 'Display information about build modes.',
+    'page callback' => 'buildmodes_overview',
+    'access arguments' => array('administer content types'),
+    'file'=> 'buildmodes.admin.inc',
+    'type' => MENU_NORMAL_ITEM,
   );
+
+  return $items;
+}
+
+function theme_buildmodes_summery($mode) {
+  static $attributes;
+  if (!$attributes) $attributes = module_invoke_all('buildmodes_attributes');
+  $output .= '<div class="buildmodes-mode"><h2>'.$mode['title'].'</h2>';
+  foreach($attributes['tabs'] as $key => $attribute) {
+    if (isset($mode[$key])) {
+      if ($attribute['theme']) $value =  theme($attribute['theme'],$mode[$key]);
+      else $value = $mode[$key];
+      $output .= theme('buildmodes_item',$attribute['title'], $value);
+    }
+  }
+  foreach($mode['build modes'] as $sub) {
+    $output .= '<div class="buildmodes-mode-sub"><h3>' . $sub['title'] . '</h3>';
+    foreach($attributes['flat'] as $key => $attribute) {
+      if (isset($sub[$key])) {
+        if ($attribute['theme']) $value =  theme($attribute['theme'],$sub[$key]);
+        else $value = $mode[$key];
+        $output .= theme('buildmodes_item',$attribute['title'], $value);
+      }
+    }
+    $output .= "</div>";
+  }
+  $output .= "</div>";
+  return $output;
+}
+
+function theme_buildmodes_item($title,$value) {
+  return '<div class="buildmodes-item"><span class="buildmodes-item-title">'.$title.':</span> '.$value.'</div>';
+}
+function theme_buildmodes_views_style($uses) {
+  if ($uses) return 'Selectable';
+  else return 'Not used';
+}
+
+function theme_buildmodes_module($module) {
+  $info  = db_fetch_object(db_query("SELECT * from system where name='%s'",$module));
+  $info->info = unserialize($info->info);
+  if ($info ) return $info->info['name'];
+}
+
+
+function buildmodes_theme() {
+  return array(
+    'buildmodes_summery' => array(
+      'arguments' => array('mode' => NULL),
+    ),
+    'buildmodes_item'=>array(
+      'arguments' => array('title' => NULL,'value'=>null),
+    ),
+    'buildmodes_views_style'=> array(
+      'arguments' => array('uses'=>NULL)  
+    ),
+    'buildmodes_module' =>array(
+      'arguments' => array('module'=>NULL)  
+    ),
+  );
+}
+function views_buildmodes_attributes() {
+ return array(
+  'flat' => array(
+    'views style' => array(
+      'title' => 'Views style status',
+      'theme' => 'buildmodes_views_style'
+      ),
+    ),
+  );
+}
+function system_buildmodes_attributes() {
+  return array(
+  'tabs' => array(
+      'module' => array(
+        'title' => 'Module',
+        'theme' => 'buildmodes_module'
+      ),
+    )
+  );
+}
+function buildmodes_buildmodes_attributes() {
+  return array(
+    'flat' => array(
+      'description' => array(
+        'title' => 'Description',
+      ),
+    ),
+    'tabs' => array(
+      'description' => array(
+        'title' => 'Description',
+      ),
+    ),
+  );
+}
+/*
+  Mostly copied from content_build_modes, used to get extra information. 
+*/
+function _buildmodes_content_build_modes($selector = '_tabs') {
+  static $info;
+    // get more info then cck's build modes provides
+  if (!isset($info)) {
+    $data = array();
+    foreach (module_implements('content_build_modes') as $module) {
+      $function = $module .'_content_build_modes';
+      $modes = (array) $function();
+      foreach($modes as $key => $mode) {
+        $modes[$key]['module'] = $module;
+      }
+      $data = array_merge($data, $modes);
+      
+    }
+    drupal_alter('content_build_modes',$data); 
+      // only alter in context of adding information to build modes we can't alter ourselves, but won't effect how unrelated module use build modes. 
+    $flat = array();
+    foreach ($data as $tab) {
+      // Use the + operator to preserve numeric indexes (core build modes).
+      $flat += (array) $tab['build modes'];
+    }
+    $info = array('tabs' => $data, 'build modes' => $flat);
+  }
+
+  if ($selector === '_tabs') {
+    return $info['tabs'];
+  }
+  elseif (isset($selector) && isset($info['tabs'][$selector])) {
+    return isset($info['tabs'][$selector]) ? $info['tabs'][$selector]['build modes'] : array();
+  }
+  else {
+    return $info['build modes'];
+  }
+}
+
+function node_content_build_modes_alter(&$data){
+  $data['basic']['description'] = 'This is the usual build mode a node will be in when displayed to the general user.';
 }
 
