@@ -110,7 +110,7 @@ function buildmodes_buildmodes_attributes() {
 /*
   Mostly copied from content_build_modes, used to get extra information. 
 */
-function _buildmodes_content_build_modes($selector = '_tabs') {
+function _buildmodes_content_build_modes($selector = NULL) {
   static $info;
     // get more info then cck's build modes provides
   if (!isset($info)) {
@@ -147,5 +147,15 @@ function _buildmodes_content_build_modes($selector = '_tabs') {
 
 function node_content_build_modes_alter(&$data){
   $data['basic']['description'] = 'This is the usual build mode a node will be in when displayed to the general user.';
+}
+
+function real_buildmode($node,$teaser){
+ if ($node->build_mode === NODE_BUILD_NORMAL || $node->build_mode == NODE_BUILD_PREVIEW) {
+    $context = $teaser ? 'teaser' : 'full';
+  }
+  else {
+    $context = $node->build_mode;
+  }
+  return $context;
 }
 

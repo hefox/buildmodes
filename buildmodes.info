@@ -1,3 +1,5 @@
 name = Build modes
 description = [buildmodes] Leverages build modes
 core = 6.x
+project = Buildmodes
+dependencies[] = content

@@ -1,0 +1,5 @@
+name = Build mode messages
+description = 
+core = 6.x
+project = Buildmodes
+dependencies[] = buildmodes

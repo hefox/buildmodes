@@ -1,0 +1,229 @@
+<?php
+/**
+ * Implementation of hook_content_extra_fields.
+ */
+function buildmodesmessage_content_extra_fields($type_name) {
+  $extras = array();
+  $items = array();
+
+  $messages = buildmodesmessage_load();
+  
+  // Now add a weight field for each view/display.
+  foreach ($messages as $key => $message) {
+    if ($message['types'] && !in_array($type_name,$message['types'])) continue; 
+    $extras['buildmodesmessage_'.$key] = array(
+      'label' => $key,
+      'description' => t('Attached message: ') .check_markup($message['message'],$message['format']),
+      'weight' => -5,
+    );
+  }
+
+  return $extras;
+}
+
+/*
+	implementation of hook_nodeapi
+*/
+function buildmodesmessage_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+  switch ($op) {
+    case 'view':
+      $buildmode = real_buildmode($node,$a3);
+      $messages = buildmodesmessage_load_by_buildmode($buildmode);
+      foreach ($messages as $key => $message) {
+        if (!$message['types'] || in_array($node->type,$message['types'])) {
+          $node->content['buildmodesmessage_'.$key] = array(
+           	'#weight' => module_exists('content') ? content_extra_field_weight($node->type, 'buildmodesmessage_'.$key) : -5,
+           	'#value' => '<div class="buildmodemessage buildmodemessage-'.$key.'">' . 
+           	  check_markup($message['message'],$message['format']) 
+           	    . '</div>',
+           	);
+        }
+      }
+      break;
+  }
+}
+function buildmodesmessage_content_build_modes_alter(&$data){
+  $messages = buildmodesmessage_load_by_buildmode();
+  
+  foreach($data as $i => $value) {
+    foreach($value['build modes'] as $k =>$info) {
+
+      if ($messages[$k]) {
+        $data[$i]['build modes'][$k]['messages'] = $messages[$k] ;
+      }
+    }
+  }
+}
+
+function buildmodesmessage_theme() {
+  return array(
+    'buildmodesmessages_overview' => array(
+      'arguments' => array('messages' => NULL),
+    ),
+    'buildmodesmessages_overview_message' => array(
+      'arguments' => array('message' => NULL),
+    ),
+  );
+}
+function buildmodesmessage_buildmodes_attributes() {
+ return array(
+  'flat' => array(
+    'messages' => array(
+      'title' => 'Messages',
+      'theme' => 'buildmodesmessages_overview'
+      ),
+    ),
+  );
+}
+function theme_buildmodesmessages_overview($messages) {
+  $output .= "<div class='buildmodemessages-messages'>";
+  foreach($messages as $message) {
+    $output .= theme('buildmodesmessages_overview_message',$message);
+  }
+  $output .= "</div>";
+  return $output;
+}
+function theme_buildmodesmessages_overview_message($message) {
+  $output .= theme('buildmodes_item','Key',$message['key']);
+  $output .= theme('buildmodes_item','Message',check_markup($message['message'],$message['format']));
+  $output .= ' ' . l("Edit",'admin/content/buildmodes/message/'.$message['key']);
+  return $output;
+}
+function buildmodesmessage_load_by_buildmode($in_mode=null,$reset = false) {
+  static $messages;
+  if (!isset($messages) || $reset) {
+     $temp_messages = buildmodesmessage_load(null,$reset);
+    foreach($temp_messages as $key=>$message) {
+      foreach(array_filter($message['build_modes']) as $mode) {
+        $messages[$mode][$key] = $message;
+      }
+    }
+  }
+  if ($in_mode) {
+   if ( $messages[$in_mode]) return $messages[$in_mode] ;
+   else return array();
+  }
+  else return $messages; 
+}
+function buildmodesmessage_load($key=null,$reset = false) {
+  static $messages;
+  if (!isset($messages) || $reset) {
+    $messages= module_invoke_all('buildmodesmessage') ;
+    $custom = variable_get('buildmodesmessage_messages',array());
+    foreach ($custom as $k => $message) {
+      if ($messages[$k]) $message['overriden'] = true;
+      $messages[$k] = $message; 
+    }
+    foreach($messages as $k => $m) {
+      $messages[$k]['key'] = $k;  
+    }
+  }
+  if ($key) {
+   if ( $messages[$key]) return $messages[$key] ;
+   else return array();
+  }
+  else return $messages; 
+}
+
+
+function buildmodesmessage_menu() {
+  $items = array();
+  $items['admin/content/buildmodes/message/add'] = array(
+    'title' => 'Add a message',
+    'description' => '',
+    'page callback' => 'buildmodesmessage_edit',
+    'access arguments' => array('administer content types'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['admin/content/buildmodes/message/%buildmodesmessage'] = array(
+    'title' => 'Edit message',
+    'description' => 'Edit a build modes message.',
+    'page callback' => 'buildmodesmessage_edit',
+    'page arguments'=>array(4),
+    'access arguments' => array('administer content types'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+function buildmodesmessage_edit($message = array()) {
+  if ($message) drupal_set_title(check_plain('Editing '. $message['key']));
+  return drupal_get_form('buildmodesmessage_edit_form', $message);
+}
+
+
+function buildmodesmessage_edit_form($form_state, $message) {
+  if ($message['key'])  {
+    $form['key'] = array('#type'=>'value','#value'=>$message['key']);
+    $form['delete'] = array('#type' => 'checkbox',
+      '#title' => t('Delete'),
+      '#default_value' => 0,
+      '#description' => t('Delete message.'),
+    );
+  } else {
+    $form['key'] = array(
+      '#default_value'=>'',
+      '#type'=>'textfield',
+      '#required'=>true,
+      '#title'=> 'Key',
+      '#description'=>'Please keep it simple, a-z A-Z, and underscores. This is used to identify the message throughout.', 
+    );
+  }
+    $form['message'] = array(
+      '#default_value'=> $message['message'],
+      '#type'=>'textarea',
+      '#required'=>true,
+      '#title'=> 'Message',
+      '#description'=>'The message to present.', 
+    );
+    $form['format'] = filter_form($message['format']);
+  $form['content_types'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Content types'),
+    '#collapsible' => TRUE,
+  );
+  $form['content_types']['types'] = array('#type' => 'checkboxes',
+    '#title' => t('Content types'),
+    '#default_value' => ($message['types']?$message['types']:array()),
+    '#options' => array_map('check_plain', node_get_types('names')),
+    '#description' => t('Select content types to the message appears on; leave blank for all.'),
+  );
+  $build_modes = _buildmodes_content_build_modes();
+  $modes = array();
+  foreach($build_modes as $key => $value) {
+    $modes[$key]= $value['title'];
+  }
+  $form['build_modes'] = array('#type' => 'checkboxes',
+    '#title' => t('Build modes'),
+    '#default_value' => ($message['build_modes']?$message['build_modes']:array()),
+    '#options' => array_map('check_plain',$modes),
+    '#description' => t('Select what build modes this message appears on.'),
+    '#required'=>true,
+  );
+  $form['export'] = array(
+    '#type'=>'textarea',
+    '#title'=> 'Exported',
+    '#value' =>  "\n function mymodule_buildmodesmessage(){ \n". var_export(array($message),1)."\n}\n",
+  );
+  $form['submit'] = array(
+    '#type'=>'submit',
+    '#value' => 'Submit',
+  );
+  $form['#redirect'] = 'admin/content/buildmodes';
+  return $form;
+}
+//todo add validation to check key
+function buildmodesmessage_edit_form_submit($form, &$form_state) {
+  $messages = variable_get('buildmodesmessage_messages',array());
+  $message = $form_state['values'];
+  foreach(array('op','form_token','form_id','form_build_id','submit','export') as $key) unset($message[$key]);
+  if ($message['key']) {
+    if (!$message['delete']) {
+      unset($message['delete']);
+      $messages[$message['key']] = $message;
+    } else {
+      unset($messages[$message['key']]);
+    }
+  }
+  variable_set('buildmodesmessage_messages',$messages);
+}
