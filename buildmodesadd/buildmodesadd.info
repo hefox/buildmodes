@@ -1,0 +1,5 @@
+name = Build modes add
+description = [buildmodesadd] Add new build modes
+core = 6.x
+project = Buildmodes
+dependencies[] = buildmodes

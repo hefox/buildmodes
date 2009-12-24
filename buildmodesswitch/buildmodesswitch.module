@@ -167,6 +167,7 @@ function buildmodesswitch_edit_form_submit($form, &$form_state) {
   if ($switch['key']) {
     if (!$switch['delete']) {
       unset($switch['delete']);
+      $switches['types'] = array_filter($switches['types']);
       $switches[$switch['key']] = $switch;
     } else {
       unset($switches[$switch['key']]);

@@ -221,10 +221,12 @@ function buildmodesmessage_edit_form_submit($form, &$form_state) {
   if ($message['key']) {
     if (!$message['delete']) {
       unset($message['delete']);
+      $message['types'] = array_filter($message['types']);
       $messages[$message['key']] = $message;
     } else {
       unset($messages[$message['key']]);
     }
   }
   variable_set('buildmodesmessage_messages',$messages);
+  drupal_set_message('Switch ' . $message['key'] . ' updated.');
 }

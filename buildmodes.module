@@ -15,10 +15,16 @@ function buildmodes_menu() {
 
   return $items;
 }
-
-function theme_buildmodes_summery($mode) {
+function buildmodes_attributes() {
   static $attributes;
-  if (!$attributes) $attributes = module_invoke_all('buildmodes_attributes');
+  if (!isset($attributes)) {
+    $attributes = module_invoke_all('buildmodes_attributes');
+    drupal_alter('buildmodes_attributes', $attributes);
+  }
+  return $attributes;
+}
+function theme_buildmodes_summery($mode) {
+  $attributes = buildmodes_attributes();
   $output .= '<div class="buildmodes-mode"><h2>'.$mode['title'].'</h2>';
   foreach($attributes['tabs'] as $key => $attribute) {
     if (isset($mode[$key])) {

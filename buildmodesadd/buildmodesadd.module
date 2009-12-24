@@ -1,0 +1,207 @@
+<?php
+
+function buildmodesadd_content_build_modes() {
+  return variable_get('buildmodesadd_modes',array());
+}
+
+function buildmodesadd_buildmodes_attributes() {
+ return array(
+  'tabs' => array(
+    'edit' => array(
+      'title' => 'Edit build mode',
+      'theme' => 'buildmodesadd_edit_link'
+      ),
+    ),
+  );
+}
+
+function buildmodesadd_theme() {
+  return array(
+    'buildmodesadd_edit_link' => array(
+      'arguments' => array('key' => NULL),
+    ),
+  );
+}
+
+function theme_buildmodesadd_edit_link($key) {
+  return l('Edit','admin/content/buildmodes/modes/'.$key);
+}
+
+function buildmodesadd_menu() {
+  $items = array();
+  $items['admin/content/buildmodes/modes/add'] = array(
+    'title' => 'Add a build mode',
+    'description' => '',
+    'page callback' => 'buildmodesadd_edit',
+    'access arguments' => array('administer content types'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['admin/content/buildmodes/modes/%buildmodesadd'] = array(
+    'title' => 'Edit message',
+    'description' => 'Edit a build modes.',
+    'page callback' => 'buildmodesadd_edit',
+    'page arguments'=>array(4),
+    'access arguments' => array('administer content types'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+function buildmodesadd_load($key) {
+  $buildmodes = variable_get('buildmodesadd_modes',array());
+  return $buildmodes[$key];
+}
+function buildmodesadd_edit($buildmode = array()) {
+  if ($buildmode) drupal_set_title(check_plain('Editing '. $buildmode['key']));
+  return drupal_get_form('buildmodesadd_edit_form', $buildmode);
+}
+
+function buildmodesadd_edit_form($form_state, $buildmode) {
+  $attributes = buildmodes_attributes();
+  $form['mode'] = array(
+    '#type'=>'fieldset',
+    '#title' => 'Base',
+    '#description'=> 'A build mode consists of two parts, the main one (that appears as one page under display settings, and contexts, the actual build modes (for example full, teaser, and search index',
+  );
+  if ($buildmode['key'])  {
+    $form['key'] = array('#type'=>'value','#value'=>$buildmode['key']);
+    $form['delete'] = array('#type' => 'checkbox',
+      '#title' => t('Delete'),
+      '#default_value' => 0,
+      '#description' => t('Delete switch.'),
+    );
+     $form['export'] = array(
+      '#type'=>'textarea',
+      '#title'=> 'Exported',
+      '#value' =>  "\n function mymodule_content_build_modes(){ \n". var_export(array($buildmode['key'] =>$buildmode),1)."\n}\n",
+    );
+  } else {
+    $form['mode']['key'] = array(
+      '#default_value'=>'',
+      '#type'=>'textfield',
+      '#required'=>true,
+      '#title'=> 'Key',
+      '#description'=>'This is the main key. Please keep it simple, a-z A-Z, and underscores. ', 
+    );
+  }
+  $form['mode']['title'] = array(
+    '#default_value'=>$buildmode['title'],
+    '#type'=>'textfield',
+    '#required'=>true,
+    '#title'=> 'Title',
+    '#description'=>'This is the main title.', 
+  );
+  foreach($attributes['tabs'] as $k => $values) {
+    if ($values['form'] && function_exists($values['form'])) {
+      $form['mode'][$k] = call_user_func($values['form'], $buildmode);
+    }
+  }
+  $buildmode['build modes']['buildmodesnew'] = array();
+  $form['build_modes'] = array(
+    '#type'=> 'fieldset',
+    '#title' => 'Build modes',
+    '#tree' => true,
+  );
+
+  $first = 1;
+  foreach($buildmode['build modes'] as $key => $mode) {
+    $form['build_modes'][$key] = array(
+      '#type'=> 'fieldset',
+      '#title'=>($mode['title']? $mode['title'] : 'New'),
+      '#tree'=>true,
+    );
+    $form['build_modes'][$key]['key'] = array(
+      '#title' => 'Key',
+      '#default_value'=> ($key!='buildmodesnew'?$key:''),
+      '#required'=>$first,
+      '#description'=>'Identifying key for this specific mode.',
+      '#type'=>'textfield',
+    );  
+    $form['build_modes'][$key]['title'] = array(
+      '#title' => 'Title',
+      '#default_value'=> $mode['title'],
+      '#required'=>$first,
+      '#type'=>'textfield',
+    );  
+    foreach($attributes['flat'] as $k => $values) {
+      if ($values['form'] && function_exists($values['form'])) {
+        $element =  call_user_func($values['form'], $mode);
+        if ($element['#use_key']) $k  = $element['#use_key'];
+        $form['build_modes'][$key][$k] = $element;
+      }
+    } 
+    $first = 0;
+  }
+    
+  $form['submit'] = array(
+    '#type'=>'submit',
+    '#value' => 'Submit',
+  );
+  $form['#redirect'] = 'admin/content/buildmodes';
+  return $form;
+}
+//todo add validation to check key
+function buildmodesadd_edit_form_submit($form, &$form_state) {
+  $buildmodes = variable_get('buildmodesadd_modes',array());
+  $buildmode = $form_state['values'];
+  foreach(array('op','form_token','form_id','form_build_id','submit','export') as $key) unset($buildmode[$key]);
+  if ($buildmode['key']) {
+    if (!$buildmode['delete']) {
+      unset($buildmode['delete']);
+      $buildmode['build modes'] = $buildmode['build_modes'];
+      unset( $buildmode['build_modes']);      
+      foreach($buildmode['build modes'] as $k => $value) {
+        if (!$value['key'] || !$value['title']){
+          unset ($buildmode['build modes'][$k]);
+          continue;
+        }
+        elseif ($k != $value['key']) {
+          echo $k;
+          $buildmode['build modes'][$value['key']] = $value;
+          unset($buildmode['build modes'][$k]);
+          $k = $value['key'];
+        }
+        foreach ($value as $kk => $vv) {
+          if (($n = $form['build_modes'][$k][$kk]['#use_value'])) {
+            $buildmode['build modes'][$k][$n] = $vv;
+            unset($buildmode['build modes'][$k][$kk]);
+          }
+        }
+      }
+      $buildmode['edit'] = $buildmode['key']; 
+      $buildmodes[$buildmode['key']] = $buildmode;
+      drupal_set_message('Mode ' . $buildmode['key'] . ' updated.');
+    } else {
+      unset($buildmodes[$buildmode['key']]);
+      drupal_set_message('Mode ' . $buildmode['key'] . ' deleted.');
+    }
+  }
+  variable_set('buildmodesadd_modes',$buildmodes);
+  
+}
+
+function views_buildmodes_attributes_alter(&$attributes) {
+ $attributes['flat']['views style']['form'] = 'buildmodes_views_style_form';
+}
+
+function buildmodes_buildmodes_attributes_alter(&$attributes) {
+  $attributes['flat']['description']['form'] = 'buildmodes_description_form';
+  $attributes['tabs']['description']['form'] = 'buildmodes_description_form';
+}
+
+function buildmodes_description_form($mode) {
+  return array(
+    '#title'=> 'Description',
+    '#type' => 'textarea',
+    '#default_value'=> $mode['description'],
+  );
+}
+function buildmodes_views_style_form($mode) {
+  return array(
+    '#title'=> 'Views style',
+    '#use_key'=>'views_style',
+    '#use_value' => 'views style',
+    '#type' => 'checkbox',
+    '#default_value'=> $mode['views style'],
+    '#description'=>'Whether or not this should appear as selection for views styles.'
+  );
+}
