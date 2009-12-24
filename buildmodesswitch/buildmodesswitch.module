@@ -1,0 +1,286 @@
+<?php
+function  buildmodesswitch_theme() {
+  return array(
+    'buildmodesswitch_overview' => array(
+      'arguments' => array('messages' => NULL),
+    ),
+    'buildmodesswitch_overview_switch' => array(
+      'arguments' => array('message' => NULL),
+    ),
+  );
+}
+function  buildmodesswitch_buildmodes_attributes() {
+ return array(
+  'flat' => array(
+    'switches' => array(
+      'title' => 'Switches',
+      'theme' => 'buildmodesswitch_overview'
+      ),
+    ),
+  );
+}
+function theme_buildmodesswitch_overview($switches) {
+  $output .= "<div class='buildmodemessages-switches'>";
+  foreach($switches as $switch) {
+    $output .= theme('buildmodesswitch_overview_switch',$switch);
+  }
+  $output .= "</div>";
+  return $output;
+}
+function theme_buildmodesswitch_overview_switch($switch) {
+  $output .= theme('buildmodes_item','Key',$switch['key']);
+  $output .= theme('buildmodes_item','Choice',$switch['choice']['title']);
+  $output .= theme('buildmodes_item','Build mode',$switch['build_mode']);
+  $output .= ' ' . l("Edit",'admin/content/buildmodes/switch/'.$switch['key']);
+  return $output;
+}
+
+/*
+	implementation of hook_nodeapi
+*/
+function buildmodesswitch_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL){
+  switch ($op) {
+    case 'view':
+        $switches = buildmodesswitch_load();
+        foreach($switches as $k => $switch) {
+          $function = $switch['choice']['function'] ;
+          if ((!$switch['types'] || in_array($node->type,$switch['types'])) 
+            && function_exists($function)  
+              && call_user_func($function,$node,$a3,$a4)) {
+            $node->build_mode = $switches['build_mode'];
+            break;
+          }
+        }
+      break;
+  }
+}
+
+
+function buildmodeswitches_order($a,$b) {
+  return ($a['weight'] < $b['weight']) ? -1 : 1;
+}
+
+function buildmodesswitch_menu() {
+  $items = array();
+  $items['admin/content/buildmodes/switch/add'] = array(
+    'title' => 'Add a switch',
+    'description' => '',
+    'page callback' => 'buildmodesswitch_edit',
+    'access arguments' => array('administer content types'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['admin/content/buildmodes/switch/%buildmodesswitch'] = array(
+    'title' => 'Edit switch',
+    'description' => 'Edit a build modes switch.',
+    'page callback' => 'buildmodesswitch_edit',
+    'page arguments'=>array(4),
+    'access arguments' => array('administer content types'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+function buildmodesswitch_edit($switch = array()) {
+  if ($switch) drupal_set_title(check_plain('Editing '. $switch['key']));
+  return drupal_get_form('buildmodesswitch_edit_form', $switch);
+}
+
+
+function buildmodesswitch_edit_form($form_state, $switch) {
+  $switches = buildmodesswitch_load();
+  $choices = buildmodesswitch_gather();
+  $allchoices = array();
+  foreach($choices as $key=> $choice) {
+    $allchoices[$key] = $choice['title'];
+  }
+  if ($switch['key'])  {
+    $form['key'] = array('#type'=>'value','#value'=>$switch['key']);
+    $form['delete'] = array('#type' => 'checkbox',
+      '#title' => t('Delete'),
+      '#default_value' => 0,
+      '#description' => t('Delete message.'),
+    );
+    $form['export'] = array(
+      '#type'=>'textarea',
+      '#title'=> 'Exported',
+      '#value' =>  "\n function mymodule_buildmodesswitchchoices(){ \n". var_export(array($switch['key']=>buildmodesswitch_load($switch['key'],1)),1)."\n}\n",
+    );
+  } else {
+    $form['key'] = array(
+      '#default_value'=>'',
+      '#type'=>'textfield',
+      '#required'=>true,
+      '#title'=> 'Key',
+      '#description'=>'Please keep it simple, a-z A-Z, and underscores. This is used to identify the message throughout.', 
+    );
+  }
+  $form['types'] = array('#type' => 'checkboxes',
+    '#title' => t('Content types'),
+    '#default_value' => ($switch['types']?$switch['types']:array()),
+    '#options' => array_map('check_plain', node_get_types('names')),
+    '#description' => t('Select content types this applies to; leave blank for all.'),
+  );
+  $build_modes = _buildmodes_content_build_modes();
+  $modes = array();
+  foreach($build_modes as $key => $value) {
+    $modes[$key]= $value['title'];
+  }
+  $weight_count = count($switches);
+  for($i=0;$i<$weight_count+3;$i++) {
+    $weight[$i] = $i ;
+  }
+  $form['weight'] = array('#type' => 'radios',
+    '#title' => t('Weight'),
+    '#default_value' => ($switch['weight']?$switch['weight']:0),
+    '#options' => $weight,
+    '#description' => t('When priority this has, lower the more likely it is to take over. For example, if using is_page, weight it before is_full.'),
+    '#required'=>true,
+  );
+
+  $form['choice'] = array('#type' => 'radios',
+    '#title' => t('Choice'),
+    '#default_value' => ($switch['choice']['key']?$switch['choice']['key']:0),
+    '#options' => array_map('check_plain',$allchoices),
+    '#description' => t('Select what circumstance this should activate on'),
+    '#required'=>true,
+  );
+  $form['build_mode'] = array('#type' => 'radios',
+    '#title' => t('Build modes'),
+    '#default_value' => ($switch['build_mode']?$switch['build_mode']:0),
+    '#options' => array_map('check_plain',$modes),
+    '#description' => t('Select what build modes it should switch to.'),
+    '#required'=>true,
+  );
+  
+  $form['submit'] = array(
+    '#type'=>'submit',
+    '#value' => 'Submit',
+  );
+  $form['#redirect'] = 'admin/content/buildmodes';
+  return $form;
+}
+//todo add validation to check key
+function buildmodesswitch_edit_form_submit($form, &$form_state) {
+  $switches = variable_get('buildmodesswitchswitches',array());
+  $switch = $form_state['values'];
+  foreach(array('op','form_token','form_id','form_build_id','submit','export') as $key) unset($switch[$key]);
+  if ($switch['key']) {
+    if (!$switch['delete']) {
+      unset($switch['delete']);
+      $switches[$switch['key']] = $switch;
+    } else {
+      unset($switches[$switch['key']]);
+    }
+  }
+  drupal_set_message('Switch ' . $switch['key'] . ' updated.');
+  variable_set('buildmodesswitchswitches',$switches);
+}
+
+function buildmodesswitch_load($in_key = null,$plain = false,$reset=null) {
+  static $switches,$switches_plain;
+  
+  if (!isset($switches) || $reset) {
+    $choices = buildmodesswitch_gather();
+    $switches =  module_invoke_all('buildmodesswitchswitches');
+    
+    $temp_switches = variable_get('buildmodesswitchswitches',array());
+    foreach($temp_switches as $key => $switch) {
+      if ($switches[$key]) {
+        $switch['overridden'] = true;
+      } 
+      $switches[$key] = $switch;
+    } 
+    
+    // allow for ones set by ui to override ones from module invoke all
+    drupal_alter('buildmodesswitchswitches',$switches);
+    $switches_plain = $switches;
+    foreach($switches as $k => $switch) {
+      $switches[$k]['choice'] = $choices[$switch['choice']];
+      $switches[$k]['choice']['key'] = $switch['choice'];
+      $switchesp[$k]['key'] = $k;    
+    }
+    
+    uasort($switches, 'buildmodeswitches_order');
+  }
+
+  if ($plain) $use = $switches_plain ;
+  else $use = $switches;
+  if ($in_key) {
+   if ( $use[$in_key]) return $use[$in_key] ;
+   else return array();
+  }
+  else return $use; 
+}
+
+function buildmodesswitch_load_by_buildmode($in_mode=null,$reset = false) {
+  static $switches;
+  if (!isset($switches) || $reset) {
+     $temp_switches = buildmodesswitch_load(null,$reset);
+    foreach($temp_switches as $key=>$switch) {
+       $switches[$switch['build_mode']][$key] = $switch;
+    }
+  }
+  if ($in_mode) {
+   if ( $switches[$in_mode]) return $switches[$in_mode] ;
+   else return array();
+  }
+  else return $switches; 
+}
+
+function buildmodesswitch_content_build_modes_alter(&$data){
+  $switches = buildmodesswitch_load_by_buildmode();
+  foreach($data as $i => $value) {
+    foreach($value['build modes'] as $k =>$info) {
+      if ($switches[$k]) {
+        $data[$i]['build modes'][$k]['switches'] = $switches[$k] ;
+      }
+    }
+  }
+}
+
+function buildmodesswitch_gather() {
+  return module_invoke_all('buildmodesswitchchoices');
+}
+
+
+
+function buildmodesswitch_buildmodesswitchchoices() {
+  return array(
+    'is_page' => array(
+      'function'=>'buildmodesswitch_is_page',
+      'title'=>'Node is being viewed as a page'
+    ),
+    'is_teaser' => array(
+      'function'=>'buildmodesswitch_is_teaser',
+      'title'=>'Node is being viewed as a teaser'
+    ),
+    'is_full' => array(
+      'function'=>'buildmodesswitch_is_full',
+      'title'=>'Node is being viewed as a full node (not teaser)'
+    ),
+    'is_teaser' => array(
+      'function'=>'buildmodesswitch_is_teaser',
+      'title'=>'Node is being viewed as a teaser'
+    ),
+    'is_sticky' => array(
+      'function'=>'buildmodesswitch_is_sticky',
+      'title'=>'Node is a sticky'
+    ),
+  );
+}
+
+function buildmodesswitch_is_page($node,$teaser,$page) {
+  if ($page) return true;
+}
+
+function buildmodesswitch_is_teaser($node,$teaser,$page) {
+  if ($teaser) return true;
+}
+
+function buildmodesswitch_is_full($node,$teaser,$page) {
+  if (empty($teaser)) return true;
+}
+
+function buildmodesswitch_is_sticky($node,$teaser,$page) {
+  if ($node->sticky) return true;
+}

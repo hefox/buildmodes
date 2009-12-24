@@ -1,5 +1,5 @@
 name = Build mode messages
-description = 
+description = [buildmodemessage] Adds a configurable text on a build mode/content type.  
 core = 6.x
 project = Buildmodes
 dependencies[] = buildmodes

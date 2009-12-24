@@ -158,7 +158,12 @@ function buildmodesmessage_edit_form($form_state, $message) {
     $form['delete'] = array('#type' => 'checkbox',
       '#title' => t('Delete'),
       '#default_value' => 0,
-      '#description' => t('Delete message.'),
+      '#description' => t('Delete switch.'),
+    );
+     $form['export'] = array(
+      '#type'=>'textarea',
+      '#title'=> 'Exported',
+      '#value' =>  "\n function mymodule_buildmodesmessage(){ \n". var_export(array($message['key'] =>$message),1)."\n}\n",
     );
   } else {
     $form['key'] = array(
@@ -200,11 +205,7 @@ function buildmodesmessage_edit_form($form_state, $message) {
     '#description' => t('Select what build modes this message appears on.'),
     '#required'=>true,
   );
-  $form['export'] = array(
-    '#type'=>'textarea',
-    '#title'=> 'Exported',
-    '#value' =>  "\n function mymodule_buildmodesmessage(){ \n". var_export(array($message),1)."\n}\n",
-  );
+ 
   $form['submit'] = array(
     '#type'=>'submit',
     '#value' => 'Submit',

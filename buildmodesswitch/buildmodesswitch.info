@@ -1,0 +1,5 @@
+name = Build mode switcher
+description = [buildmodesswitch] Switches build modes a node is being viewed as. 
+core = 6.x
+project = Buildmodes
+dependencies[] = buildmodes
